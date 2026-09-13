@@ -193,10 +193,7 @@ impl AipOutput for AipTextTrimOutput {}
 
 /// Trims whitespace from text according to the specified mode ("all", "start", or "end").
 #[aip_handler]
-fn aip_text_trim_handler(
-	_call_ctx: HandlerCallContext,
-	params: AipTextTrimParams,
-) -> HandlerResult<AipTextTrimOutput> {
+fn aip_text_trim_handler(_call_ctx: HandlerCallContext, params: AipTextTrimParams) -> HandlerResult<AipTextTrimOutput> {
 	let Some(text) = params.text else {
 		return Ok(AipTextTrimOutput(None));
 	};
