@@ -1,0 +1,391 @@
+type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
+
+use super::*;
+use crate::modules::{DirContext, ZmaprModule};
+use crate::{AipRegistryBuilder, RunningContext, ScriptEngine};
+use tempfile::TempDir;
+
+fn setup_engine() -> crate::Result<ScriptEngine> {
+	let registry = AipRegistryBuilder::default().add_module(ZmaprModule)?.build();
+	Ok(ScriptEngine::builder().with_registry(registry).build()?)
+}
+
+fn setup_context(tmp: &TempDir) -> Result<RunningContext> {
+	let root = simple_fs::SPath::from_std_path(tmp.path())?;
+	let dir_context = DirContext::from_base_dir(root)?;
+	let mut context = RunningContext::default();
+	context.insert(dir_context);
+	Ok(context)
+}
+
+async fn eval_script_error(engine: &ScriptEngine, script: &str, context: RunningContext) -> Result<String> {
+	let outcome = engine.exec(script, context).await?;
+	let error = outcome.result.err().ok_or("Expected script execution to fail")?;
+	Ok(error.to_string())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_local_fetch_ok() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	let docs = tmp.path().join("docs");
+	std::fs::create_dir_all(&docs)?;
+	std::fs::write(docs.join("a.md"), "# A")?;
+	std::fs::write(docs.join("b.md"), "# B")?;
+	let engine = setup_engine()?;
+	let context = setup_context(&tmp)?;
+	let script = r#"
+		return aip.zmapr.process({
+			source = "docs",
+			destination = "docs-out"
+		})
+	"#;
+
+	// -- Exec
+	let outcome = engine.exec(script, context).await?;
+	let output = outcome.result?;
+
+	// -- Check
+	assert!(output["content_root"].is_string());
+	assert!(output["journal_errors"].is_array() || output["journal_errors"].is_object());
+	assert!(
+		output["stats"]["fetch"]["completed"]
+			.as_u64()
+			.is_some_and(|completed| completed >= 2)
+	);
+	assert!(output["stats"]["sanitize"].is_null());
+	assert!(output["stats"]["map"].is_null());
+	let items = output["items"].as_array().expect("items should be an array");
+	assert_eq!(items.len(), 2);
+	for item in items {
+		assert_eq!(item["fetch"]["status"].as_str(), Some("completed"));
+		assert!(
+			item["relative_path"]
+				.as_str()
+				.is_some_and(|relative_path| !relative_path.is_empty())
+		);
+	}
+	let started_epoch_us = output["stats"]["started_epoch_us"]
+		.as_i64()
+		.expect("stats.started_epoch_us should be an integer");
+	let ended_epoch_us = output["stats"]["ended_epoch_us"]
+		.as_i64()
+		.expect("stats.ended_epoch_us should be an integer");
+	assert!(ended_epoch_us >= started_epoch_us);
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_fetch_disabled_rerun_ok() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	let docs = tmp.path().join("docs");
+	std::fs::create_dir_all(&docs)?;
+	std::fs::write(docs.join("a.md"), "# A")?;
+	let engine = setup_engine()?;
+	let first_context = setup_context(&tmp)?;
+	let first_outcome = engine
+		.exec(
+			r#"
+				return aip.zmapr.process({
+					source = "docs",
+					destination = "docs-out"
+				})
+			"#,
+			first_context,
+		)
+		.await?;
+	let _first_output = first_outcome.result?;
+	let second_context = setup_context(&tmp)?;
+
+	// -- Exec
+	let error = eval_script_error(
+		&engine,
+		r#"
+			return aip.zmapr.process({
+				source = "docs",
+				destination = "docs-out",
+				fetch = false,
+				sanitize = false,
+				map = false
+			})
+		"#,
+		second_context,
+	)
+	.await?;
+
+	// -- Check
+	assert!(error.contains("[ZMAPR_INVALID_CONFIG]"), "{error}");
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_missing_source_err() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	let engine = setup_engine()?;
+	let context = setup_context(&tmp)?;
+
+	// -- Exec
+	let error = eval_script_error(
+		&engine,
+		r#"return aip.zmapr.process({ destination = "docs-out" })"#,
+		context,
+	)
+	.await?;
+
+	// -- Check
+	assert!(error.contains("Missing required property 'source' of type 'string'"), "{error}");
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_missing_destination_err() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	let engine = setup_engine()?;
+	let context = setup_context(&tmp)?;
+
+	// -- Exec
+	let error = eval_script_error(
+		&engine,
+		r#"return aip.zmapr.process({ source = "docs" })"#,
+		context,
+	)
+	.await?;
+
+	// -- Check
+	assert!(
+		error.contains("Missing required property 'destination' of type 'string'"),
+		"{error}"
+	);
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_invalid_format_err() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	let engine = setup_engine()?;
+	let context = setup_context(&tmp)?;
+
+	// -- Exec
+	let error = eval_script_error(
+		&engine,
+		r#"return aip.zmapr.process({ source = "docs", destination = "out", format = "json" })"#,
+		context,
+	)
+	.await?;
+
+	// -- Check
+	assert!(
+		error.contains("Property 'format' expected to be one of 'raw', 'slim', 'md', but was 'json'"),
+		"{error}"
+	);
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_zero_concurrency_err() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	let engine = setup_engine()?;
+	let context = setup_context(&tmp)?;
+
+	// -- Exec
+	let error = eval_script_error(
+		&engine,
+		r#"return aip.zmapr.process({ source = "docs", destination = "out", concurrency = 0 })"#,
+		context,
+	)
+	.await?;
+
+	// -- Check
+	assert!(
+		error.contains("Property 'concurrency' must be greater than or equal to 1"),
+		"{error}"
+	);
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_sanitize_prompt_both_keys_err() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	let engine = setup_engine()?;
+	let context = setup_context(&tmp)?;
+
+	// -- Exec
+	let error = eval_script_error(
+		&engine,
+		r#"
+			return aip.zmapr.process({
+				source = "docs",
+				destination = "out",
+				sanitize_prompt = { file = "prompt.md", content = "instructions" }
+			})
+		"#,
+		context,
+	)
+	.await?;
+
+	// -- Check
+	assert!(
+		error.contains("cannot contain both 'file' and 'content'"),
+		"{error}"
+	);
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_destination_outside_policy_err() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	std::fs::create_dir_all(tmp.path().join("docs"))?;
+	let engine = setup_engine()?;
+	let context = setup_context(&tmp)?;
+
+	// -- Exec
+	let error = eval_script_error(
+		&engine,
+		r#"return aip.zmapr.process({ source = "docs", destination = "../outside" })"#,
+		context,
+	)
+	.await?;
+
+	// -- Check
+	assert!(error.contains("[PATH_POLICY_DENIED]"), "{error}");
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_sanitize_without_model_err() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	std::fs::create_dir_all(tmp.path().join("docs"))?;
+	let engine = setup_engine()?;
+	let context = setup_context(&tmp)?;
+
+	// -- Exec
+	let error = eval_script_error(
+		&engine,
+		r#"
+			return aip.zmapr.process({
+				source = "docs",
+				destination = "out",
+				sanitize = true
+			})
+		"#,
+		context,
+	)
+	.await?;
+
+	// -- Check
+	assert!(error.contains("[ZMAPR_INVALID_CONFIG]"), "{error}");
+	Ok(())
+}
+
+#[test]
+fn test_build_process_options_preserves_defaults_and_applies_overrides() {
+	// -- Setup & Fixtures
+	let default_params = AipZmaprProcessParams {
+		source: "docs".to_string(),
+		destination: "out".to_string(),
+		base_dir: None,
+		fetch: None,
+		include: None,
+		exclude: None,
+		format: None,
+		max_depth: None,
+		llms: None,
+		sanitize: None,
+		map: None,
+		model: None,
+		sanitize_model: None,
+		map_model: None,
+		sanitize_prompt: None,
+		resume: None,
+		concurrency: None,
+	};
+	let default_paths = ResolvedZmaprPaths {
+		source: "docs".to_string(),
+		destination: "out".to_string(),
+		sanitize_prompt_file: None,
+	};
+
+	// -- Exec
+	let defaults = build_process_options(default_params, default_paths);
+
+	// -- Check
+	assert_eq!(defaults.source, "docs");
+	assert_eq!(
+		defaults.destination.as_ref().map(|path| path.as_str()),
+		Some("out")
+	);
+	assert!(defaults.fetch);
+	assert!(defaults.include.is_empty());
+	assert!(defaults.exclude.is_empty());
+	assert!(matches!(defaults.format, zmapr::FetchFormat::Md));
+	assert_eq!(defaults.max_depth, 0);
+	assert!(defaults.llms);
+	assert!(!defaults.sanitize);
+	assert!(!defaults.map);
+	assert!(defaults.model.is_none());
+	assert!(defaults.sanitize_model.is_none());
+	assert!(defaults.map_model.is_none());
+	assert!(defaults.sanitize_prompt.is_none());
+	assert!(!defaults.resume);
+	assert_eq!(defaults.concurrency, 8);
+
+	let override_params = AipZmaprProcessParams {
+		source: "unused".to_string(),
+		destination: "unused".to_string(),
+		base_dir: None,
+		fetch: Some(false),
+		include: Some(AipZmaprStringList::Multiple(vec!["**/*.md".to_string()])),
+		exclude: Some(AipZmaprStringList::Single("**/draft/**".to_string())),
+		format: Some(AipZmaprFetchFormat::Slim),
+		max_depth: Some(2),
+		llms: Some(false),
+		sanitize: Some(true),
+		map: Some(true),
+		model: Some("gpt-6-luna".to_string()),
+		sanitize_model: Some("sanitize-model".to_string()),
+		map_model: Some("map-model".to_string()),
+		sanitize_prompt: Some(AipZmaprSanitizePrompt::Content("instructions".to_string())),
+		resume: Some(true),
+		concurrency: Some(3),
+	};
+	let override_paths = ResolvedZmaprPaths {
+		source: "resolved-source".to_string(),
+		destination: "resolved-output".to_string(),
+		sanitize_prompt_file: None,
+	};
+
+	// -- Exec
+	let overrides = build_process_options(override_params, override_paths);
+
+	// -- Check
+	assert_eq!(overrides.source, "resolved-source");
+	assert_eq!(
+		overrides.destination.as_ref().map(|path| path.as_str()),
+		Some("resolved-output")
+	);
+	assert!(!overrides.fetch);
+	assert_eq!(overrides.include, vec!["**/*.md"]);
+	assert_eq!(overrides.exclude, vec!["**/draft/**"]);
+	assert!(matches!(overrides.format, zmapr::FetchFormat::Slim));
+	assert_eq!(overrides.max_depth, 2);
+	assert!(!overrides.llms);
+	assert!(overrides.sanitize);
+	assert!(overrides.map);
+	assert_eq!(overrides.model.as_deref(), Some("gpt-6-luna"));
+	assert_eq!(overrides.sanitize_model.as_deref(), Some("sanitize-model"));
+	assert_eq!(overrides.map_model.as_deref(), Some("map-model"));
+	assert!(matches!(
+		overrides.sanitize_prompt,
+		Some(zmapr::SanitizePrompt::Content(ref content)) if content == "instructions"
+	));
+	assert!(overrides.resume);
+	assert_eq!(overrides.concurrency, 3);
+}

@@ -83,6 +83,22 @@ fn test_modules_init_registry_contains_time_module() -> Result<()> {
 	Ok(())
 }
 
+#[test]
+fn test_modules_init_registry_contains_zmapr_module() -> Result<()> {
+	// -- Exec
+	let registry = init_registry()?;
+	let paths = registry
+		.list_registered_fns()
+		.into_iter()
+		.map(|registered| registered.path)
+		.collect::<Vec<_>>();
+
+	// -- Check
+	assert!(paths.iter().any(|path| path == "aip.zmapr.process"));
+
+	Ok(())
+}
+
 #[tokio::test]
 async fn test_modules_web_native_functions_install_constants() -> Result<()> {
 	// -- Setup & Fixtures

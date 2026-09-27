@@ -5,6 +5,7 @@ use crate::{AipRegistry, AipRegistryBuilder, NativeFunctionSet};
 mod aip_file;
 mod aip_html;
 mod aip_json;
+mod aip_zmapr;
 pub mod aip_md;
 pub mod aip_text;
 pub mod aip_time;
@@ -15,6 +16,7 @@ pub use aip_file::file_types::{AbsolutePathPolicy, DirContext, DirPolicyError, P
 
 pub use aip_html::HtmlModule;
 pub use aip_json::JsonModule;
+pub use aip_zmapr::ZmaprModule;
 pub use aip_md::MdModule;
 pub use aip_text::TextModule;
 pub use aip_time::TimeModule;
@@ -31,6 +33,7 @@ pub use aip_web::WebModule;
 pub fn init_registry() -> crate::Result<AipRegistry> {
 	Ok(AipRegistryBuilder::default()
 		.add_module(JsonModule)?
+		.add_module(ZmaprModule)?
 		.add_module(WebModule)?
 		.add_module(FileModule)?
 		.add_module(HtmlModule)?
