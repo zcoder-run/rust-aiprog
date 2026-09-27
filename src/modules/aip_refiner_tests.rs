@@ -346,7 +346,7 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 	assert!(defaults.include.is_empty());
 	assert!(defaults.exclude.is_empty());
 	assert!(matches!(defaults.format, refinr::FetchFormat::Md));
-	assert_eq!(defaults.max_depth, 0);
+	assert_eq!(defaults.max_depth, 10);
 	assert!(defaults.llms);
 	assert!(!defaults.sanitize);
 	assert!(!defaults.map);

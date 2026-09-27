@@ -106,7 +106,7 @@ pub struct AipRefinrProcessParams {
 	pub exclude: Option<AipRefinrStringList>,
 	/// Representation used for fetched HTML content. Defaults to `md`.
 	pub format: Option<AipRefinrFetchFormat>,
-	/// Maximum web crawl depth. Defaults to `0`.
+	/// Maximum web crawl depth. Defaults to `10`.
 	pub max_depth: Option<usize>,
 	/// Whether to discover `llms.txt` entries. Defaults to `true`.
 	pub llms: Option<bool>,
@@ -369,9 +369,7 @@ fn build_process_options(params: AipRefinrProcessParams, paths: ResolvedRefinerP
 			AipRefinrFetchFormat::Md => refinr::FetchFormat::Md,
 		});
 	}
-	if let Some(max_depth) = params.max_depth {
-		options = options.with_max_depth(max_depth);
-	}
+	options = options.with_max_depth(params.max_depth.unwrap_or(10));
 	if let Some(llms) = params.llms {
 		options = options.with_llms(llms);
 	}
