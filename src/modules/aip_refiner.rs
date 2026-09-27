@@ -15,7 +15,8 @@
 use crate::modules::{DirContext, DirPolicyError};
 use crate::registry::{HandlerError, HandlerResult};
 use crate::{
-	AipFromLua, AipIntoLua, AipModule, AipOutput, AipParams, AipRegistryBuilder, HandlerCallContext, LuaExt, LuaJsonExt,
+	AiContext, AipFromLua, AipIntoLua, AipModule, AipOutput, AipParams, AipRegistryBuilder, ContextAccessError,
+	HandlerCallContext, LuaExt, LuaJsonExt,
 };
 use mlua::{Lua, Table, Value};
 
@@ -284,7 +285,12 @@ async fn aip_refiner_process_handler(
 		.with::<DirContext, _>(|dir| resolve_refiner_paths(dir, &params))?
 		.map_err(|error| HandlerError::custom(format!("[PATH_POLICY_DENIED] {error}")))?;
 
-	let options = build_process_options(params, paths);
+	let ai_options = match call_ctx.with::<AiContext, _>(|ai| resolve_ai_options(ai, &params)) {
+		Ok(options) => Some(options),
+		Err(ContextAccessError::MissingValue { .. } | ContextAccessError::ContextUnavailable) => None,
+		Err(error) => return Err(error.into()),
+	};
+	let options = build_process_options(params, paths, ai_options);
 	let handle = refinr::process_content(options).await.map_err(|error| {
 		HandlerError::custom(format!("[REFINER_INVALID_CONFIG] aip.refiner.process failed. {error}"))
 	})?;
@@ -345,7 +351,38 @@ fn is_web_source(source: &str) -> bool {
 		|| source.get(..8).is_some_and(|prefix| prefix.eq_ignore_ascii_case("https://"))
 }
 
-fn build_process_options(params: AipRefinrProcessParams, paths: ResolvedRefinerPaths) -> refinr::ProcessContentOptions {
+struct ResolvedAiOptions {
+	genai_client: Option<genai::Client>,
+	model: Option<String>,
+	sanitize_model: Option<String>,
+	map_model: Option<String>,
+}
+
+fn resolve_ai_options(ai: &AiContext, params: &AipRefinrProcessParams) -> ResolvedAiOptions {
+	let sanitize_model = if params.sanitize.unwrap_or(false) {
+		ai.resolve_model(params.sanitize_model.as_deref().or(params.model.as_deref()))
+	} else {
+		None
+	};
+	let map_model = if params.map.unwrap_or(false) {
+		ai.resolve_model(params.map_model.as_deref().or(params.model.as_deref()))
+	} else {
+		None
+	};
+
+	ResolvedAiOptions {
+		genai_client: ai.genai_client().cloned(),
+		model: ai.resolve_model(params.model.as_deref()),
+		sanitize_model,
+		map_model,
+	}
+}
+
+fn build_process_options(
+	params: AipRefinrProcessParams,
+	paths: ResolvedRefinerPaths,
+	ai_options: Option<ResolvedAiOptions>,
+) -> refinr::ProcessContentOptions {
 	let ResolvedRefinerPaths {
 		source,
 		destination,
@@ -404,6 +441,20 @@ fn build_process_options(params: AipRefinrProcessParams, paths: ResolvedRefinerP
 	}
 	if let Some(concurrency) = params.concurrency {
 		options = options.with_concurrency(concurrency);
+	}
+	if let Some(ai_options) = ai_options {
+		if let Some(client) = ai_options.genai_client {
+			options = options.with_genai_client(client);
+		}
+		if let Some(model) = ai_options.model {
+			options = options.with_model(model);
+		}
+		if let Some(model) = ai_options.sanitize_model {
+			options = options.with_sanitize_model(model);
+		}
+		if let Some(model) = ai_options.map_model {
+			options = options.with_map_model(model);
+		}
 	}
 
 	options

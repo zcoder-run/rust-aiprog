@@ -337,7 +337,7 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 	};
 
 	// -- Exec
-	let defaults = build_process_options(default_params, default_paths);
+	let defaults = build_process_options(default_params, default_paths, None);
 
 	// -- Check
 	assert_eq!(defaults.source, "docs");
@@ -383,7 +383,7 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 	};
 
 	// -- Exec
-	let overrides = build_process_options(override_params, override_paths);
+	let overrides = build_process_options(override_params, override_paths, None);
 
 	// -- Check
 	assert_eq!(overrides.source, "resolved-source");
@@ -463,4 +463,95 @@ fn test_aip_refiner_sanitize_prompt_rejects_invalid_table_combinations() -> Resu
 	}
 
 	Ok(())
+}
+
+#[test]
+fn test_build_process_options_resolves_ai_context_stage_models() {
+	// -- Setup & Fixtures
+	let ai_context = AiContext::default()
+		.with_genai_client(genai::Client::new().expect("GenAI client construction should succeed"))
+		.with_model_map(std::collections::HashMap::from([
+			("sanitize-alias".to_string(), "provider/sanitize".to_string()),
+			("request-alias".to_string(), "provider/request".to_string()),
+			("default-alias".to_string(), "provider/default".to_string()),
+		]))
+		.with_default_model("default-alias");
+	let params = AipRefinrProcessParams {
+		source: "docs".to_string(),
+		destination: "out".to_string(),
+		base_dir: None,
+		fetch: None,
+		include: None,
+		exclude: None,
+		format: None,
+		max_depth: None,
+		llms: None,
+		sanitize: Some(true),
+		map: Some(true),
+		model: Some("request-alias".to_string()),
+		sanitize_model: Some("sanitize-alias".to_string()),
+		map_model: None,
+		sanitize_prompt: None,
+		resume: None,
+		concurrency: None,
+	};
+	let paths = ResolvedRefinerPaths {
+		source: "docs".to_string(),
+		destination: "out".to_string(),
+		sanitize_prompt_file: None,
+	};
+
+	// -- Exec
+	let ai_options = resolve_ai_options(&ai_context, &params);
+	let options = build_process_options(params, paths, Some(ai_options));
+
+	// -- Check
+	assert!(options.genai_client.is_some());
+	assert_eq!(options.model.as_deref(), Some("provider/request"));
+	assert_eq!(options.sanitize_model.as_deref(), Some("provider/sanitize"));
+	assert_eq!(options.map_model.as_deref(), Some("provider/request"));
+}
+
+#[test]
+fn test_build_process_options_uses_ai_context_default_model() {
+	// -- Setup & Fixtures
+	let ai_context = AiContext::default()
+		.with_model_map(std::collections::HashMap::from([(
+			"default-alias".to_string(),
+			"provider/default".to_string(),
+		)]))
+		.with_default_model("default-alias");
+	let params = AipRefinrProcessParams {
+		source: "docs".to_string(),
+		destination: "out".to_string(),
+		base_dir: None,
+		fetch: None,
+		include: None,
+		exclude: None,
+		format: None,
+		max_depth: None,
+		llms: None,
+		sanitize: Some(true),
+		map: Some(true),
+		model: None,
+		sanitize_model: None,
+		map_model: None,
+		sanitize_prompt: None,
+		resume: None,
+		concurrency: None,
+	};
+	let paths = ResolvedRefinerPaths {
+		source: "docs".to_string(),
+		destination: "out".to_string(),
+		sanitize_prompt_file: None,
+	};
+
+	// -- Exec
+	let ai_options = resolve_ai_options(&ai_context, &params);
+	let options = build_process_options(params, paths, Some(ai_options));
+
+	// -- Check
+	assert_eq!(options.model.as_deref(), Some("provider/default"));
+	assert_eq!(options.sanitize_model.as_deref(), Some("provider/default"));
+	assert_eq!(options.map_model.as_deref(), Some("provider/default"));
 }

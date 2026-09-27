@@ -45,7 +45,7 @@ udiffx = { version = "0.3", features = ["prompt"]}
 aicost = { version = "0.2"}
 markex = { version = "0.3.0" }
 sysone = { version = "0.0.3" }
-refinr = { version = "0.0.1" }
+refinr = { git = "https://github.com/zcoder-run/rust-refinr.git" }
 # -- Json & Data Formats
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

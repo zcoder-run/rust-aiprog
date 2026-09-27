@@ -6,6 +6,7 @@ extern crate self as aiprog; // for aiprog_macros
 #[cfg(test)]
 mod _test_support;
 
+mod ai_context;
 mod base;
 mod engine;
 mod error_lua_details;
@@ -22,6 +23,7 @@ mod error;
 
 pub use error::{Error, Result};
 pub use error_lua_details::LuaErrorDetails;
+pub use ai_context::AiContext;
 pub use modules::{AbsolutePathPolicy, DirContext, DirPolicyError, PathPolicy, ResolvedDirPath};
 pub use run_outcome::RunOutcome;
 pub use running_context::{ContextAccessError, ContextRecoveryError, HandlerCallContext, RunningContext};
