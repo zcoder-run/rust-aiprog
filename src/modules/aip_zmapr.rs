@@ -60,6 +60,15 @@ pub enum AipZmaprSanitizePrompt {
 	Content(String),
 }
 
+#[derive(schemars::JsonSchema)]
+#[schemars(untagged, inline)]
+#[allow(dead_code)]
+enum AipZmaprSanitizePromptSchema {
+	Inline(String),
+	File { file: String },
+	Content { content: String },
+}
+
 /// A single include or exclude pattern, or a list of patterns.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
@@ -112,6 +121,7 @@ pub struct AipZmaprProcessParams {
 	/// Model override for the Map stage.
 	pub map_model: Option<String>,
 	/// Custom instructions replacing the built-in Sanitize instructions.
+	#[schemars(with = "Option<AipZmaprSanitizePromptSchema>")]
 	pub sanitize_prompt: Option<AipZmaprSanitizePrompt>,
 	/// Whether to reuse successful unchanged work. Defaults to `false`.
 	pub resume: Option<bool>,

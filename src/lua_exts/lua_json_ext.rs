@@ -1,6 +1,8 @@
 use crate::LuaExt;
 use mlua::{Lua, LuaSerdeExt as _, Table, Value};
 
+const JSON_ARRAY_MARKER: &str = "__aip_json_array";
+
 /// Lua JSON conversion extension trait for Lua values.
 ///
 /// This trait provides custom JSON ↔ Lua conversion methods that replace
@@ -78,6 +80,26 @@ impl LuaJsonExt for Value {
 		// that is compatible with `LuaExt::x_is_null`.
 		match val {
 			serde_json::Value::Null => Ok(Value::NULL),
+			serde_json::Value::Array(values) => {
+				let table = lua.create_table()?;
+				if values.is_empty() {
+					// Lua tables have no intrinsic empty-array/object distinction.
+					let metatable = lua.create_table()?;
+					metatable.set(JSON_ARRAY_MARKER, true)?;
+					table.set_metatable(Some(metatable))?;
+				}
+				for (index, value) in values.into_iter().enumerate() {
+					table.set(index + 1, Self::x_from_json_value(lua, value)?)?;
+				}
+				Ok(Value::Table(table))
+			}
+			serde_json::Value::Object(values) => {
+				let table = lua.create_table()?;
+				for (key, value) in values {
+					table.set(key, Self::x_from_json_value(lua, value)?)?;
+				}
+				Ok(Value::Table(table))
+			}
 			other => Ok(lua.to_value(&other)?),
 		}
 	}
@@ -102,6 +124,17 @@ impl LuaJsonExt for Value {
 		}
 
 		fn convert_table(table: mlua::Table) -> crate::Result<serde_json::Value> {
+			let marked_empty_array = table
+				.metatable()
+				.is_some_and(|metatable| metatable.get::<bool>(JSON_ARRAY_MARKER).unwrap_or(false));
+			if marked_empty_array {
+				let marked_table = table.clone();
+				let mut pairs = marked_table.pairs::<Value, Value>();
+				if pairs.next().is_none() {
+					return Ok(serde_json::Value::Array(Vec::new()));
+				}
+			}
+
 			// Try to treat as an array (1..n contiguous integer keys, no gaps)
 			let mut max_idx: usize = 0;
 			let mut numeric_only = true;

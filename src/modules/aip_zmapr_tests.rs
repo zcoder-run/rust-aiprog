@@ -47,7 +47,7 @@ async fn test_aip_zmapr_process_local_fetch_ok() -> Result<()> {
 
 	// -- Check
 	assert!(output["content_root"].is_string());
-	assert!(output["journal_errors"].is_array() || output["journal_errors"].is_object());
+	assert!(output["journal_errors"].is_array());
 	assert!(
 		output["stats"]["fetch"]["completed"]
 			.as_u64()
@@ -72,6 +72,34 @@ async fn test_aip_zmapr_process_local_fetch_ok() -> Result<()> {
 		.as_i64()
 		.expect("stats.ended_epoch_us should be an integer");
 	assert!(ended_epoch_us >= started_epoch_us);
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_aip_zmapr_process_empty_lists_are_arrays() -> Result<()> {
+	// -- Setup & Fixtures
+	let tmp = TempDir::new()?;
+	std::fs::create_dir_all(tmp.path().join("docs"))?;
+	let engine = setup_engine()?;
+	let context = setup_context(&tmp)?;
+
+	// -- Exec
+	let outcome = engine
+		.exec(
+			r#"
+				return aip.zmapr.process({
+					source = "docs",
+					destination = "docs-out"
+				})
+			"#,
+			context,
+		)
+		.await?;
+	let output = outcome.result?;
+
+	// -- Check
+	assert_eq!(output["items"].as_array().map(Vec::len), Some(0));
+	assert_eq!(output["journal_errors"].as_array().map(Vec::len), Some(0));
 	Ok(())
 }
 
@@ -388,4 +416,61 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 	));
 	assert!(overrides.resume);
 	assert_eq!(overrides.concurrency, 3);
+}
+
+#[test]
+fn test_aip_zmapr_sanitize_prompt_schema_matches_lua_forms() -> Result<()> {
+	let params_schema = serde_json::to_value(schemars::schema_for!(AipZmaprProcessParams))?;
+	let sanitize_prompt_schema = params_schema["properties"]["sanitize_prompt"].to_string();
+
+	assert!(sanitize_prompt_schema.contains("\"type\":\"string\""));
+	assert!(sanitize_prompt_schema.contains("\"file\""));
+	assert!(sanitize_prompt_schema.contains("\"content\""));
+	Ok(())
+}
+
+#[test]
+fn test_aip_zmapr_sanitize_prompt_accepts_lua_forms() -> Result<()> {
+	let lua = Lua::new();
+
+	let table = lua
+		.load(r#"return { sanitize_prompt = "instructions" }"#)
+		.eval::<Table>()?;
+	assert!(matches!(
+		optional_sanitize_prompt(&table)?,
+		Some(AipZmaprSanitizePrompt::Content(content)) if content == "instructions"
+	));
+
+	let table = lua
+		.load(r#"return { sanitize_prompt = { file = "prompt.md" } }"#)
+		.eval::<Table>()?;
+	assert!(matches!(
+		optional_sanitize_prompt(&table)?,
+		Some(AipZmaprSanitizePrompt::File(path)) if path == "prompt.md"
+	));
+
+	let table = lua
+		.load(r#"return { sanitize_prompt = { content = "instructions" } }"#)
+		.eval::<Table>()?;
+	assert!(matches!(
+		optional_sanitize_prompt(&table)?,
+		Some(AipZmaprSanitizePrompt::Content(content)) if content == "instructions"
+	));
+
+	Ok(())
+}
+
+#[test]
+fn test_aip_zmapr_sanitize_prompt_rejects_invalid_table_combinations() -> Result<()> {
+	let lua = Lua::new();
+
+	for script in [
+		r#"return { sanitize_prompt = { file = "prompt.md", content = "instructions" } }"#,
+		r#"return { sanitize_prompt = {} }"#,
+	] {
+		let table = lua.load(script).eval::<Table>()?;
+		assert!(optional_sanitize_prompt(&table).is_err());
+	}
+
+	Ok(())
 }
