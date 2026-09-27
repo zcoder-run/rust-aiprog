@@ -40,7 +40,7 @@ aiprog-macros = { version = "0.0.3", path = "crates/aiprog-macros" }
 # -- Async
 tokio = { version = "1", features = ["full"] }
 # -- AI
-genai = { version = "0.7.0-beta.21" }
+genai = { version = "0.7.0-rc" }
 udiffx = { version = "0.3", features = ["prompt"]}
 aicost = { version = "0.2"}
 markex = { version = "0.3.0" }
