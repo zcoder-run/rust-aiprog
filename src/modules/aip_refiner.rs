@@ -1,10 +1,10 @@
-//! Defines the `zmapr` module, used in the Lua engine.
+//! Defines the `refiner` module, used in the Lua engine.
 //!
 //! ## Lua documentation
 //!
-//! The `aip.zmapr` module exposes the zmapr content-processing workflow.
+//! The `aip.refiner` module exposes the refiner content-processing workflow.
 //!
-//! - `aip.zmapr.process(params: AipZmaprProcessParams) -> AipZmaprProcessOutput`
+//! - `aip.refiner.process(params: AipRefinrProcessParams) -> AipRefinrProcessOutput`
 //!
 //! The call waits for processing and publication to finish. Local source,
 //! destination, and Sanitize prompt paths are resolved through `DirContext`.
@@ -22,26 +22,26 @@ use mlua::{Lua, Table, Value};
 // region:    --- Module
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ZmaprModule;
+pub struct RefinrModule;
 
-impl AipModule for ZmaprModule {
+impl AipModule for RefinrModule {
 	fn register(builder: AipRegistryBuilder) -> crate::Result<AipRegistryBuilder> {
 		register(builder)
 	}
 }
 
 fn register(builder: AipRegistryBuilder) -> crate::Result<AipRegistryBuilder> {
-	Ok(builder.register_async("aip.zmapr.process", aip_zmapr_process_handler)?)
+	Ok(builder.register_async("aip.refiner.process", aip_refiner_process_handler)?)
 }
 
 // endregion: --- Module
 
 // region:    --- Types
 
-/// Fetch representation selected by `aip.zmapr.process`.
+/// Fetch representation selected by `aip.refiner.process`.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum AipZmaprFetchFormat {
+pub enum AipRefinrFetchFormat {
 	/// Preserve fetched content in its raw representation.
 	Raw,
 	/// Select a compact representation.
@@ -53,7 +53,7 @@ pub enum AipZmaprFetchFormat {
 /// Custom instructions for the Sanitize stage.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum AipZmaprSanitizePrompt {
+pub enum AipRefinrSanitizePrompt {
 	/// Read custom instructions from a policy-authorized file.
 	File(String),
 	/// Use inline custom instructions.
@@ -63,7 +63,7 @@ pub enum AipZmaprSanitizePrompt {
 #[derive(schemars::JsonSchema)]
 #[schemars(untagged, inline)]
 #[allow(dead_code)]
-enum AipZmaprSanitizePromptSchema {
+enum AipRefinrSanitizePromptSchema {
 	Inline(String),
 	File { file: String },
 	Content { content: String },
@@ -72,14 +72,14 @@ enum AipZmaprSanitizePromptSchema {
 /// A single include or exclude pattern, or a list of patterns.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
-pub enum AipZmaprStringList {
+pub enum AipRefinrStringList {
 	/// One pattern.
 	Single(String),
 	/// Multiple patterns.
 	Multiple(Vec<String>),
 }
 
-impl AipZmaprStringList {
+impl AipRefinrStringList {
 	fn into_vec(self) -> Vec<String> {
 		match self {
 			Self::Single(value) => vec![value],
@@ -88,10 +88,10 @@ impl AipZmaprStringList {
 	}
 }
 
-/// Parameters for `aip.zmapr.process`.
+/// Parameters for `aip.refiner.process`.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-pub struct AipZmaprProcessParams {
+pub struct AipRefinrProcessParams {
 	/// Local path or HTTP(S) URL to fetch.
 	pub source: String,
 	/// Required output directory, resolved through the write policy.
@@ -101,11 +101,11 @@ pub struct AipZmaprProcessParams {
 	/// Whether to run Fetch. Defaults to `true`.
 	pub fetch: Option<bool>,
 	/// Patterns selecting content to include.
-	pub include: Option<AipZmaprStringList>,
+	pub include: Option<AipRefinrStringList>,
 	/// Patterns selecting content to exclude.
-	pub exclude: Option<AipZmaprStringList>,
+	pub exclude: Option<AipRefinrStringList>,
 	/// Representation used for fetched HTML content. Defaults to `md`.
-	pub format: Option<AipZmaprFetchFormat>,
+	pub format: Option<AipRefinrFetchFormat>,
 	/// Maximum web crawl depth. Defaults to `0`.
 	pub max_depth: Option<usize>,
 	/// Whether to discover `llms.txt` entries. Defaults to `true`.
@@ -121,15 +121,15 @@ pub struct AipZmaprProcessParams {
 	/// Model override for the Map stage.
 	pub map_model: Option<String>,
 	/// Custom instructions replacing the built-in Sanitize instructions.
-	#[schemars(with = "Option<AipZmaprSanitizePromptSchema>")]
-	pub sanitize_prompt: Option<AipZmaprSanitizePrompt>,
+	#[schemars(with = "Option<AipRefinrSanitizePromptSchema>")]
+	pub sanitize_prompt: Option<AipRefinrSanitizePrompt>,
 	/// Whether to reuse successful unchanged work. Defaults to `false`.
 	pub resume: Option<bool>,
 	/// Maximum parallel item processing. Defaults to `8`.
 	pub concurrency: Option<usize>,
 }
 
-impl AipFromLua for AipZmaprProcessParams {
+impl AipFromLua for AipRefinrProcessParams {
 	fn from_lua(_lua: &Lua, value: Value) -> crate::Result<Self> {
 		let table = params_table(&value)?;
 
@@ -155,19 +155,19 @@ impl AipFromLua for AipZmaprProcessParams {
 	}
 }
 
-impl AipParams for AipZmaprProcessParams {}
+impl AipParams for AipRefinrProcessParams {}
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
-pub struct AipZmaprStats {
+pub struct AipRefinrStats {
 	/// Final Fetch statistics, or `None` if Fetch was not selected.
-	pub fetch: Option<AipZmaprStageStats>,
+	pub fetch: Option<AipRefinrStageStats>,
 	/// Final Sanitize statistics, or `None` if Sanitize was not selected.
-	pub sanitize: Option<AipZmaprStageStats>,
+	pub sanitize: Option<AipRefinrStageStats>,
 	/// Final Map statistics, or `None` if Map was not selected.
-	pub map: Option<AipZmaprStageStats>,
+	pub map: Option<AipRefinrStageStats>,
 	/// Aggregated token usage across the workflow, when available.
-	pub total_usage: Option<AipZmaprUsage>,
+	pub total_usage: Option<AipRefinrUsage>,
 	/// Workflow start time in epoch microseconds.
 	pub started_epoch_us: i64,
 	/// Workflow end time in epoch microseconds.
@@ -178,7 +178,7 @@ pub struct AipZmaprStats {
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
-pub struct AipZmaprStageStats {
+pub struct AipRefinrStageStats {
 	/// Number of items accounted for by the stage outcomes.
 	pub total_items: usize,
 	/// Items processed during this workflow.
@@ -192,7 +192,7 @@ pub struct AipZmaprStageStats {
 	/// Items excluded from processing.
 	pub excluded: usize,
 	/// Token usage reported for this stage, when available.
-	pub usage: Option<AipZmaprUsage>,
+	pub usage: Option<AipRefinrUsage>,
 	/// Stage start time in epoch microseconds.
 	pub started_epoch_us: i64,
 	/// Stage end time in epoch microseconds.
@@ -203,7 +203,7 @@ pub struct AipZmaprStageStats {
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
-pub struct AipZmaprUsage {
+pub struct AipRefinrUsage {
 	/// Number of prompt tokens, when reported.
 	pub prompt_tokens: Option<i64>,
 	/// Number of completion tokens, when reported.
@@ -214,7 +214,7 @@ pub struct AipZmaprUsage {
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
-pub struct AipZmaprItem {
+pub struct AipRefinrItem {
 	/// Source string associated with this item.
 	pub source: String,
 	/// Original path associated with this item.
@@ -222,30 +222,30 @@ pub struct AipZmaprItem {
 	/// Path used to identify this item relative to its source root.
 	pub relative_path: String,
 	/// Final Fetch-stage state, when recorded.
-	pub fetch: Option<AipZmaprItemStage>,
+	pub fetch: Option<AipRefinrItemStage>,
 	/// Final Sanitize-stage state, when recorded.
-	pub sanitize: Option<AipZmaprItemStage>,
+	pub sanitize: Option<AipRefinrItemStage>,
 	/// Final Map-stage state, when recorded.
-	pub map: Option<AipZmaprItemStage>,
+	pub map: Option<AipRefinrItemStage>,
 }
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
-pub struct AipZmaprItemStage {
+pub struct AipRefinrItemStage {
 	/// Lowercase snake_case lifecycle status.
 	pub status: String,
-	/// Path to the stage artifact. Fetch and Sanitize artifacts live under `.tmp-zmapr/`.
+	/// Path to the stage artifact. Fetch and Sanitize artifacts live under `.tmp-refinr/`.
 	pub path: Option<String>,
 	/// Error details when the stage failed.
 	pub error: Option<String>,
 	/// Token usage reported for the stage, when available.
-	pub usage: Option<AipZmaprUsage>,
+	pub usage: Option<AipRefinrUsage>,
 }
 
-/// Result of a completed `aip.zmapr.process` workflow.
+/// Result of a completed `aip.refiner.process` workflow.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
-pub struct AipZmaprProcessOutput {
+pub struct AipRefinrProcessOutput {
 	/// Root directory containing generated workflow artifacts.
 	pub destination: String,
 	/// Destination root containing the published final content.
@@ -255,45 +255,41 @@ pub struct AipZmaprProcessOutput {
 	/// Published content map, when mapping was selected.
 	pub content_map_path: Option<String>,
 	/// Final workflow and per-stage statistics.
-	pub stats: AipZmaprStats,
+	pub stats: AipRefinrStats,
 	/// Final state of all registered workflow items.
-	pub items: Vec<AipZmaprItem>,
+	pub items: Vec<AipRefinrItem>,
 	/// Non-fatal journal append errors.
 	pub journal_errors: Vec<String>,
 }
 
-impl AipIntoLua for AipZmaprProcessOutput {
+impl AipIntoLua for AipRefinrProcessOutput {
 	fn into_lua(self, lua: &Lua) -> crate::Result<Value> {
 		let value = serde_json::to_value(self).map_err(|error| crate::Error::custom(error.to_string()))?;
 		Value::x_from_json_value(lua, value)
 	}
 }
 
-impl AipOutput for AipZmaprProcessOutput {}
+impl AipOutput for AipRefinrProcessOutput {}
 
 // endregion: --- Types
 
 // region:    --- Handler
 
 /// Runs Fetch, Sanitize, and Map in order and returns the completed workflow output.
-async fn aip_zmapr_process_handler(
+async fn aip_refiner_process_handler(
 	call_ctx: HandlerCallContext,
-	params: AipZmaprProcessParams,
-) -> HandlerResult<AipZmaprProcessOutput> {
+	params: AipRefinrProcessParams,
+) -> HandlerResult<AipRefinrProcessOutput> {
 	let paths = call_ctx
-		.with::<DirContext, _>(|dir| resolve_zmapr_paths(dir, &params))?
+		.with::<DirContext, _>(|dir| resolve_refiner_paths(dir, &params))?
 		.map_err(|error| HandlerError::custom(format!("[PATH_POLICY_DENIED] {error}")))?;
 
 	let options = build_process_options(params, paths);
-	let handle = zmapr::process_content(options).await.map_err(|error| {
-		HandlerError::custom(format!(
-			"[ZMAPR_INVALID_CONFIG] aip.zmapr.process failed. {error}"
-		))
+	let handle = refinr::process_content(options).await.map_err(|error| {
+		HandlerError::custom(format!("[REFINER_INVALID_CONFIG] aip.refiner.process failed. {error}"))
 	})?;
 	let output = handle.wait_output().await.map_err(|error| {
-		HandlerError::custom(format!(
-			"[ZMAPR_PROCESS_FAILED] aip.zmapr.process failed. {error}"
-		))
+		HandlerError::custom(format!("[REFINER_PROCESS_FAILED] aip.refiner.process failed. {error}"))
 	})?;
 
 	Ok(project_process_output(output))
@@ -303,16 +299,16 @@ async fn aip_zmapr_process_handler(
 
 // region:    --- Support
 
-struct ResolvedZmaprPaths {
+struct ResolvedRefinerPaths {
 	source: String,
 	destination: String,
 	sanitize_prompt_file: Option<String>,
 }
 
-fn resolve_zmapr_paths(
+fn resolve_refiner_paths(
 	dir: &DirContext,
-	params: &AipZmaprProcessParams,
-) -> Result<ResolvedZmaprPaths, DirPolicyError> {
+	params: &AipRefinrProcessParams,
+) -> Result<ResolvedRefinerPaths, DirPolicyError> {
 	let source = if is_web_source(&params.source) {
 		params.source.clone()
 	} else {
@@ -331,16 +327,13 @@ fn resolve_zmapr_paths(
 		.to_string();
 
 	let sanitize_prompt_file = match params.sanitize_prompt.as_ref() {
-		Some(AipZmaprSanitizePrompt::File(path)) => Some(
-			dir.resolve_read(path, params.base_dir.as_deref())?
-				.path()
-				.as_str()
-				.to_string(),
-		),
+		Some(AipRefinrSanitizePrompt::File(path)) => {
+			Some(dir.resolve_read(path, params.base_dir.as_deref())?.path().as_str().to_string())
+		}
 		_ => None,
 	};
 
-	Ok(ResolvedZmaprPaths {
+	Ok(ResolvedRefinerPaths {
 		source,
 		destination,
 		sanitize_prompt_file,
@@ -348,24 +341,17 @@ fn resolve_zmapr_paths(
 }
 
 fn is_web_source(source: &str) -> bool {
-	source
-		.get(..7)
-		.is_some_and(|prefix| prefix.eq_ignore_ascii_case("http://"))
-		|| source
-			.get(..8)
-			.is_some_and(|prefix| prefix.eq_ignore_ascii_case("https://"))
+	source.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("http://"))
+		|| source.get(..8).is_some_and(|prefix| prefix.eq_ignore_ascii_case("https://"))
 }
 
-fn build_process_options(
-	params: AipZmaprProcessParams,
-	paths: ResolvedZmaprPaths,
-) -> zmapr::ProcessContentOptions {
-	let ResolvedZmaprPaths {
+fn build_process_options(params: AipRefinrProcessParams, paths: ResolvedRefinerPaths) -> refinr::ProcessContentOptions {
+	let ResolvedRefinerPaths {
 		source,
 		destination,
 		sanitize_prompt_file,
 	} = paths;
-	let mut options = zmapr::ProcessContentOptions::new(source).with_dest(destination);
+	let mut options = refinr::ProcessContentOptions::new(source).with_dest(destination);
 
 	if let Some(fetch) = params.fetch {
 		options = options.with_fetch(fetch);
@@ -378,9 +364,9 @@ fn build_process_options(
 	}
 	if let Some(format) = params.format {
 		options = options.with_format(match format {
-			AipZmaprFetchFormat::Raw => zmapr::FetchFormat::Raw,
-			AipZmaprFetchFormat::Slim => zmapr::FetchFormat::Slim,
-			AipZmaprFetchFormat::Md => zmapr::FetchFormat::Md,
+			AipRefinrFetchFormat::Raw => refinr::FetchFormat::Raw,
+			AipRefinrFetchFormat::Slim => refinr::FetchFormat::Slim,
+			AipRefinrFetchFormat::Md => refinr::FetchFormat::Md,
 		});
 	}
 	if let Some(max_depth) = params.max_depth {
@@ -405,13 +391,13 @@ fn build_process_options(
 		options = options.with_map_model(model);
 	}
 	match params.sanitize_prompt {
-		Some(AipZmaprSanitizePrompt::File(_)) => {
+		Some(AipRefinrSanitizePrompt::File(_)) => {
 			if let Some(path) = sanitize_prompt_file {
-				options = options.with_sanitize_prompt(zmapr::SanitizePrompt::file(path));
+				options = options.with_sanitize_prompt(refinr::SanitizePrompt::file(path));
 			}
 		}
-		Some(AipZmaprSanitizePrompt::Content(content)) => {
-			options = options.with_sanitize_prompt(zmapr::SanitizePrompt::content(content));
+		Some(AipRefinrSanitizePrompt::Content(content)) => {
+			options = options.with_sanitize_prompt(refinr::SanitizePrompt::content(content));
 		}
 		None => {}
 	}
@@ -425,9 +411,9 @@ fn build_process_options(
 	options
 }
 
-fn project_stats(stats: zmapr::FinalStats) -> AipZmaprStats {
+fn project_stats(stats: refinr::FinalStats) -> AipRefinrStats {
 	let duration_ms = stats.duration().as_millis() as u64;
-	AipZmaprStats {
+	AipRefinrStats {
 		fetch: stats.fetch.map(project_stage_stats),
 		sanitize: stats.sanitize.map(project_stage_stats),
 		map: stats.map.map(project_stage_stats),
@@ -438,9 +424,9 @@ fn project_stats(stats: zmapr::FinalStats) -> AipZmaprStats {
 	}
 }
 
-fn project_stage_stats(stats: zmapr::StageFinal) -> AipZmaprStageStats {
+fn project_stage_stats(stats: refinr::StageFinal) -> AipRefinrStageStats {
 	let duration_ms = stats.duration().as_millis() as u64;
-	AipZmaprStageStats {
+	AipRefinrStageStats {
 		total_items: stats.total_items,
 		completed: stats.completed,
 		reused: stats.reused,
@@ -454,16 +440,16 @@ fn project_stage_stats(stats: zmapr::StageFinal) -> AipZmaprStageStats {
 	}
 }
 
-fn project_usage(usage: genai::chat::Usage) -> AipZmaprUsage {
-	AipZmaprUsage {
+fn project_usage(usage: genai::chat::Usage) -> AipRefinrUsage {
+	AipRefinrUsage {
 		prompt_tokens: usage.prompt_tokens.map(i64::from),
 		completion_tokens: usage.completion_tokens.map(i64::from),
 		total_tokens: usage.total_tokens.map(i64::from),
 	}
 }
 
-fn project_item(item: zmapr::ItemState) -> AipZmaprItem {
-	AipZmaprItem {
+fn project_item(item: refinr::ItemState) -> AipRefinrItem {
+	AipRefinrItem {
 		source: item.source,
 		origin_path: item.origin_path,
 		relative_path: item.relative_path,
@@ -473,8 +459,8 @@ fn project_item(item: zmapr::ItemState) -> AipZmaprItem {
 	}
 }
 
-fn project_item_stage(stage: zmapr::ItemStageState) -> AipZmaprItemStage {
-	AipZmaprItemStage {
+fn project_item_stage(stage: refinr::ItemStageState) -> AipRefinrItemStage {
+	AipRefinrItemStage {
 		status: item_status_name(&stage.status),
 		path: stage.path.map(|path| path.as_str().to_string()),
 		error: stage.error,
@@ -482,20 +468,20 @@ fn project_item_stage(stage: zmapr::ItemStageState) -> AipZmaprItemStage {
 	}
 }
 
-fn item_status_name(status: &zmapr::ItemStatus) -> String {
+fn item_status_name(status: &refinr::ItemStatus) -> String {
 	let status = match status {
-		zmapr::ItemStatus::Pending => "pending",
-		zmapr::ItemStatus::Running => "running",
-		zmapr::ItemStatus::Completed => "completed",
-		zmapr::ItemStatus::Reused => "reused",
-		zmapr::ItemStatus::Skipped => "skipped",
-		zmapr::ItemStatus::Failed => "failed",
+		refinr::ItemStatus::Pending => "pending",
+		refinr::ItemStatus::Running => "running",
+		refinr::ItemStatus::Completed => "completed",
+		refinr::ItemStatus::Reused => "reused",
+		refinr::ItemStatus::Skipped => "skipped",
+		refinr::ItemStatus::Failed => "failed",
 	};
 	status.to_string()
 }
 
-fn project_process_output(output: zmapr::ProcessContentOutput) -> AipZmaprProcessOutput {
-	AipZmaprProcessOutput {
+fn project_process_output(output: refinr::ProcessContentOutput) -> AipRefinrProcessOutput {
+	AipRefinrProcessOutput {
 		destination: output.destination.as_str().to_string(),
 		content_root: output.content_root.as_str().to_string(),
 		manifest_path: output.manifest_path.map(|path| path.as_str().to_string()),
@@ -544,13 +530,13 @@ fn optional_bool(table: &Table, key: &str) -> crate::Result<Option<bool>> {
 		.ok_or_else(|| type_mismatch_error(key, "boolean", &value))
 }
 
-fn optional_string_list(table: &Table, key: &str) -> crate::Result<Option<AipZmaprStringList>> {
+fn optional_string_list(table: &Table, key: &str) -> crate::Result<Option<AipRefinrStringList>> {
 	let Some(value) = optional_property(table, key)? else {
 		return Ok(None);
 	};
 
 	if let Some(value) = value.x_as_lua_str() {
-		return Ok(Some(AipZmaprStringList::Single(value.to_string())));
+		return Ok(Some(AipRefinrStringList::Single(value.to_string())));
 	}
 
 	let Some(values) = value.x_as_list() else {
@@ -565,22 +551,19 @@ fn optional_string_list(table: &Table, key: &str) -> crate::Result<Option<AipZma
 	let values = values
 		.into_iter()
 		.map(|value| {
-			value
-				.x_as_lua_str()
-				.map(|value| value.to_string())
-				.ok_or_else(|| {
-					crate::Error::custom(format!(
-						"Property '{key}' entries expected to be of type 'string', but got type '{}'",
-						value.type_name()
-					))
-				})
+			value.x_as_lua_str().map(|value| value.to_string()).ok_or_else(|| {
+				crate::Error::custom(format!(
+					"Property '{key}' entries expected to be of type 'string', but got type '{}'",
+					value.type_name()
+				))
+			})
 		})
 		.collect::<crate::Result<Vec<_>>>()?;
 
-	Ok(Some(AipZmaprStringList::Multiple(values)))
+	Ok(Some(AipRefinrStringList::Multiple(values)))
 }
 
-fn optional_fetch_format(table: &Table, key: &str) -> crate::Result<Option<AipZmaprFetchFormat>> {
+fn optional_fetch_format(table: &Table, key: &str) -> crate::Result<Option<AipRefinrFetchFormat>> {
 	let Some(value) = optional_property(table, key)? else {
 		return Ok(None);
 	};
@@ -589,9 +572,9 @@ fn optional_fetch_format(table: &Table, key: &str) -> crate::Result<Option<AipZm
 	};
 
 	match format.as_ref() {
-		"raw" => Ok(Some(AipZmaprFetchFormat::Raw)),
-		"slim" => Ok(Some(AipZmaprFetchFormat::Slim)),
-		"md" => Ok(Some(AipZmaprFetchFormat::Md)),
+		"raw" => Ok(Some(AipRefinrFetchFormat::Raw)),
+		"slim" => Ok(Some(AipRefinrFetchFormat::Slim)),
+		"md" => Ok(Some(AipRefinrFetchFormat::Md)),
 		_ => Err(crate::Error::custom(format!(
 			"Property 'format' expected to be one of 'raw', 'slim', 'md', but was '{format}'"
 		))),
@@ -615,13 +598,13 @@ fn optional_usize(table: &Table, key: &str, minimum: usize) -> crate::Result<Opt
 		.map_err(|_| crate::Error::custom(format!("Property '{key}' is too large")))
 }
 
-fn optional_sanitize_prompt(table: &Table) -> crate::Result<Option<AipZmaprSanitizePrompt>> {
+fn optional_sanitize_prompt(table: &Table) -> crate::Result<Option<AipRefinrSanitizePrompt>> {
 	let Some(value) = optional_property(table, "sanitize_prompt")? else {
 		return Ok(None);
 	};
 
 	match value {
-		Value::String(content) => Ok(Some(AipZmaprSanitizePrompt::Content(content.to_string_lossy()))),
+		Value::String(content) => Ok(Some(AipRefinrSanitizePrompt::Content(content.to_string_lossy()))),
 		Value::Table(prompt_table) => {
 			let file = optional_prompt_string(&prompt_table, "file")?;
 			let content = optional_prompt_string(&prompt_table, "content")?;
@@ -629,18 +612,14 @@ fn optional_sanitize_prompt(table: &Table) -> crate::Result<Option<AipZmaprSanit
 				(Some(_), Some(_)) => Err(crate::Error::custom(
 					"Property 'sanitize_prompt' table cannot contain both 'file' and 'content'",
 				)),
-				(Some(file), None) => Ok(Some(AipZmaprSanitizePrompt::File(file))),
-				(None, Some(content)) => Ok(Some(AipZmaprSanitizePrompt::Content(content))),
+				(Some(file), None) => Ok(Some(AipRefinrSanitizePrompt::File(file))),
+				(None, Some(content)) => Ok(Some(AipRefinrSanitizePrompt::Content(content))),
 				(None, None) => Err(crate::Error::custom(
 					"Property 'sanitize_prompt' table must contain either 'file' or 'content'",
 				)),
 			}
 		}
-		other => Err(type_mismatch_error(
-			"sanitize_prompt",
-			"string or table",
-			&other,
-		)),
+		other => Err(type_mismatch_error("sanitize_prompt", "string or table", &other)),
 	}
 }
 
@@ -666,7 +645,7 @@ fn type_mismatch_error(key: &str, expected: &str, value: &Value) -> crate::Error
 // region:    --- Tests
 
 #[cfg(test)]
-#[path = "aip_zmapr_tests.rs"]
-mod tests;
+#[path = "aip_refiner_tests.rs"]
+mod aip_refiner_tests;
 
 // endregion: --- Tests

@@ -84,7 +84,7 @@ fn test_modules_init_registry_contains_time_module() -> Result<()> {
 }
 
 #[test]
-fn test_modules_init_registry_contains_zmapr_module() -> Result<()> {
+fn test_modules_init_registry_contains_refiner_module() -> Result<()> {
 	// -- Exec
 	let registry = init_registry()?;
 	let paths = registry
@@ -94,7 +94,7 @@ fn test_modules_init_registry_contains_zmapr_module() -> Result<()> {
 		.collect::<Vec<_>>();
 
 	// -- Check
-	assert!(paths.iter().any(|path| path == "aip.zmapr.process"));
+	assert!(paths.iter().any(|path| path == "aip.refiner.process"));
 
 	Ok(())
 }

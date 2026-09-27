@@ -1,12 +1,12 @@
 type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
 use super::*;
-use crate::modules::{DirContext, ZmaprModule};
+use crate::modules::{DirContext, RefinrModule};
 use crate::{AipRegistryBuilder, RunningContext, ScriptEngine};
 use tempfile::TempDir;
 
 fn setup_engine() -> crate::Result<ScriptEngine> {
-	let registry = AipRegistryBuilder::default().add_module(ZmaprModule)?.build();
+	let registry = AipRegistryBuilder::default().add_module(RefinrModule)?.build();
 	Ok(ScriptEngine::builder().with_registry(registry).build()?)
 }
 
@@ -25,7 +25,7 @@ async fn eval_script_error(engine: &ScriptEngine, script: &str, context: Running
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_local_fetch_ok() -> Result<()> {
+async fn test_aip_refiner_process_local_fetch_ok() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	let docs = tmp.path().join("docs");
@@ -35,7 +35,7 @@ async fn test_aip_zmapr_process_local_fetch_ok() -> Result<()> {
 	let engine = setup_engine()?;
 	let context = setup_context(&tmp)?;
 	let script = r#"
-		return aip.zmapr.process({
+		return aip.refiner.process({
 			source = "docs",
 			destination = "docs-out"
 		})
@@ -76,7 +76,7 @@ async fn test_aip_zmapr_process_local_fetch_ok() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_empty_lists_are_arrays() -> Result<()> {
+async fn test_aip_refiner_process_empty_lists_are_arrays() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	std::fs::create_dir_all(tmp.path().join("docs"))?;
@@ -87,7 +87,7 @@ async fn test_aip_zmapr_process_empty_lists_are_arrays() -> Result<()> {
 	let outcome = engine
 		.exec(
 			r#"
-				return aip.zmapr.process({
+				return aip.refiner.process({
 					source = "docs",
 					destination = "docs-out"
 				})
@@ -104,7 +104,7 @@ async fn test_aip_zmapr_process_empty_lists_are_arrays() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_fetch_disabled_rerun_ok() -> Result<()> {
+async fn test_aip_refiner_process_fetch_disabled_rerun_ok() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	let docs = tmp.path().join("docs");
@@ -115,7 +115,7 @@ async fn test_aip_zmapr_process_fetch_disabled_rerun_ok() -> Result<()> {
 	let first_outcome = engine
 		.exec(
 			r#"
-				return aip.zmapr.process({
+				return aip.refiner.process({
 					source = "docs",
 					destination = "docs-out"
 				})
@@ -130,7 +130,7 @@ async fn test_aip_zmapr_process_fetch_disabled_rerun_ok() -> Result<()> {
 	let error = eval_script_error(
 		&engine,
 		r#"
-			return aip.zmapr.process({
+			return aip.refiner.process({
 				source = "docs",
 				destination = "docs-out",
 				fetch = false,
@@ -143,12 +143,12 @@ async fn test_aip_zmapr_process_fetch_disabled_rerun_ok() -> Result<()> {
 	.await?;
 
 	// -- Check
-	assert!(error.contains("[ZMAPR_INVALID_CONFIG]"), "{error}");
+	assert!(error.contains("[REFINER_INVALID_CONFIG]"), "{error}");
 	Ok(())
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_missing_source_err() -> Result<()> {
+async fn test_aip_refiner_process_missing_source_err() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	let engine = setup_engine()?;
@@ -157,30 +157,28 @@ async fn test_aip_zmapr_process_missing_source_err() -> Result<()> {
 	// -- Exec
 	let error = eval_script_error(
 		&engine,
-		r#"return aip.zmapr.process({ destination = "docs-out" })"#,
+		r#"return aip.refiner.process({ destination = "docs-out" })"#,
 		context,
 	)
 	.await?;
 
 	// -- Check
-	assert!(error.contains("Missing required property 'source' of type 'string'"), "{error}");
+	assert!(
+		error.contains("Missing required property 'source' of type 'string'"),
+		"{error}"
+	);
 	Ok(())
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_missing_destination_err() -> Result<()> {
+async fn test_aip_refiner_process_missing_destination_err() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	let engine = setup_engine()?;
 	let context = setup_context(&tmp)?;
 
 	// -- Exec
-	let error = eval_script_error(
-		&engine,
-		r#"return aip.zmapr.process({ source = "docs" })"#,
-		context,
-	)
-	.await?;
+	let error = eval_script_error(&engine, r#"return aip.refiner.process({ source = "docs" })"#, context).await?;
 
 	// -- Check
 	assert!(
@@ -191,7 +189,7 @@ async fn test_aip_zmapr_process_missing_destination_err() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_invalid_format_err() -> Result<()> {
+async fn test_aip_refiner_process_invalid_format_err() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	let engine = setup_engine()?;
@@ -200,7 +198,7 @@ async fn test_aip_zmapr_process_invalid_format_err() -> Result<()> {
 	// -- Exec
 	let error = eval_script_error(
 		&engine,
-		r#"return aip.zmapr.process({ source = "docs", destination = "out", format = "json" })"#,
+		r#"return aip.refiner.process({ source = "docs", destination = "out", format = "json" })"#,
 		context,
 	)
 	.await?;
@@ -214,7 +212,7 @@ async fn test_aip_zmapr_process_invalid_format_err() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_zero_concurrency_err() -> Result<()> {
+async fn test_aip_refiner_process_zero_concurrency_err() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	let engine = setup_engine()?;
@@ -223,7 +221,7 @@ async fn test_aip_zmapr_process_zero_concurrency_err() -> Result<()> {
 	// -- Exec
 	let error = eval_script_error(
 		&engine,
-		r#"return aip.zmapr.process({ source = "docs", destination = "out", concurrency = 0 })"#,
+		r#"return aip.refiner.process({ source = "docs", destination = "out", concurrency = 0 })"#,
 		context,
 	)
 	.await?;
@@ -237,7 +235,7 @@ async fn test_aip_zmapr_process_zero_concurrency_err() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_sanitize_prompt_both_keys_err() -> Result<()> {
+async fn test_aip_refiner_process_sanitize_prompt_both_keys_err() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	let engine = setup_engine()?;
@@ -247,7 +245,7 @@ async fn test_aip_zmapr_process_sanitize_prompt_both_keys_err() -> Result<()> {
 	let error = eval_script_error(
 		&engine,
 		r#"
-			return aip.zmapr.process({
+			return aip.refiner.process({
 				source = "docs",
 				destination = "out",
 				sanitize_prompt = { file = "prompt.md", content = "instructions" }
@@ -258,15 +256,12 @@ async fn test_aip_zmapr_process_sanitize_prompt_both_keys_err() -> Result<()> {
 	.await?;
 
 	// -- Check
-	assert!(
-		error.contains("cannot contain both 'file' and 'content'"),
-		"{error}"
-	);
+	assert!(error.contains("cannot contain both 'file' and 'content'"), "{error}");
 	Ok(())
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_destination_outside_policy_err() -> Result<()> {
+async fn test_aip_refiner_process_destination_outside_policy_err() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	std::fs::create_dir_all(tmp.path().join("docs"))?;
@@ -276,7 +271,7 @@ async fn test_aip_zmapr_process_destination_outside_policy_err() -> Result<()> {
 	// -- Exec
 	let error = eval_script_error(
 		&engine,
-		r#"return aip.zmapr.process({ source = "docs", destination = "../outside" })"#,
+		r#"return aip.refiner.process({ source = "docs", destination = "../outside" })"#,
 		context,
 	)
 	.await?;
@@ -287,7 +282,7 @@ async fn test_aip_zmapr_process_destination_outside_policy_err() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_aip_zmapr_process_sanitize_without_model_err() -> Result<()> {
+async fn test_aip_refiner_process_sanitize_without_model_err() -> Result<()> {
 	// -- Setup & Fixtures
 	let tmp = TempDir::new()?;
 	std::fs::create_dir_all(tmp.path().join("docs"))?;
@@ -298,7 +293,7 @@ async fn test_aip_zmapr_process_sanitize_without_model_err() -> Result<()> {
 	let error = eval_script_error(
 		&engine,
 		r#"
-			return aip.zmapr.process({
+			return aip.refiner.process({
 				source = "docs",
 				destination = "out",
 				sanitize = true
@@ -309,14 +304,14 @@ async fn test_aip_zmapr_process_sanitize_without_model_err() -> Result<()> {
 	.await?;
 
 	// -- Check
-	assert!(error.contains("[ZMAPR_INVALID_CONFIG]"), "{error}");
+	assert!(error.contains("[REFINER_INVALID_CONFIG]"), "{error}");
 	Ok(())
 }
 
 #[test]
 fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 	// -- Setup & Fixtures
-	let default_params = AipZmaprProcessParams {
+	let default_params = AipRefinrProcessParams {
 		source: "docs".to_string(),
 		destination: "out".to_string(),
 		base_dir: None,
@@ -335,7 +330,7 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 		resume: None,
 		concurrency: None,
 	};
-	let default_paths = ResolvedZmaprPaths {
+	let default_paths = ResolvedRefinerPaths {
 		source: "docs".to_string(),
 		destination: "out".to_string(),
 		sanitize_prompt_file: None,
@@ -346,14 +341,11 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 
 	// -- Check
 	assert_eq!(defaults.source, "docs");
-	assert_eq!(
-		defaults.destination.as_ref().map(|path| path.as_str()),
-		Some("out")
-	);
+	assert_eq!(defaults.destination.as_ref().map(|path| path.as_str()), Some("out"));
 	assert!(defaults.fetch);
 	assert!(defaults.include.is_empty());
 	assert!(defaults.exclude.is_empty());
-	assert!(matches!(defaults.format, zmapr::FetchFormat::Md));
+	assert!(matches!(defaults.format, refinr::FetchFormat::Md));
 	assert_eq!(defaults.max_depth, 0);
 	assert!(defaults.llms);
 	assert!(!defaults.sanitize);
@@ -365,14 +357,14 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 	assert!(!defaults.resume);
 	assert_eq!(defaults.concurrency, 8);
 
-	let override_params = AipZmaprProcessParams {
+	let override_params = AipRefinrProcessParams {
 		source: "unused".to_string(),
 		destination: "unused".to_string(),
 		base_dir: None,
 		fetch: Some(false),
-		include: Some(AipZmaprStringList::Multiple(vec!["**/*.md".to_string()])),
-		exclude: Some(AipZmaprStringList::Single("**/draft/**".to_string())),
-		format: Some(AipZmaprFetchFormat::Slim),
+		include: Some(AipRefinrStringList::Multiple(vec!["**/*.md".to_string()])),
+		exclude: Some(AipRefinrStringList::Single("**/draft/**".to_string())),
+		format: Some(AipRefinrFetchFormat::Slim),
 		max_depth: Some(2),
 		llms: Some(false),
 		sanitize: Some(true),
@@ -380,11 +372,11 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 		model: Some("gpt-6-luna".to_string()),
 		sanitize_model: Some("sanitize-model".to_string()),
 		map_model: Some("map-model".to_string()),
-		sanitize_prompt: Some(AipZmaprSanitizePrompt::Content("instructions".to_string())),
+		sanitize_prompt: Some(AipRefinrSanitizePrompt::Content("instructions".to_string())),
 		resume: Some(true),
 		concurrency: Some(3),
 	};
-	let override_paths = ResolvedZmaprPaths {
+	let override_paths = ResolvedRefinerPaths {
 		source: "resolved-source".to_string(),
 		destination: "resolved-output".to_string(),
 		sanitize_prompt_file: None,
@@ -402,7 +394,7 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 	assert!(!overrides.fetch);
 	assert_eq!(overrides.include, vec!["**/*.md"]);
 	assert_eq!(overrides.exclude, vec!["**/draft/**"]);
-	assert!(matches!(overrides.format, zmapr::FetchFormat::Slim));
+	assert!(matches!(overrides.format, refinr::FetchFormat::Slim));
 	assert_eq!(overrides.max_depth, 2);
 	assert!(!overrides.llms);
 	assert!(overrides.sanitize);
@@ -412,15 +404,15 @@ fn test_build_process_options_preserves_defaults_and_applies_overrides() {
 	assert_eq!(overrides.map_model.as_deref(), Some("map-model"));
 	assert!(matches!(
 		overrides.sanitize_prompt,
-		Some(zmapr::SanitizePrompt::Content(ref content)) if content == "instructions"
+		Some(refinr::SanitizePrompt::Content(ref content)) if content == "instructions"
 	));
 	assert!(overrides.resume);
 	assert_eq!(overrides.concurrency, 3);
 }
 
 #[test]
-fn test_aip_zmapr_sanitize_prompt_schema_matches_lua_forms() -> Result<()> {
-	let params_schema = serde_json::to_value(schemars::schema_for!(AipZmaprProcessParams))?;
+fn test_aip_refiner_sanitize_prompt_schema_matches_lua_forms() -> Result<()> {
+	let params_schema = serde_json::to_value(schemars::schema_for!(AipRefinrProcessParams))?;
 	let sanitize_prompt_schema = params_schema["properties"]["sanitize_prompt"].to_string();
 
 	assert!(sanitize_prompt_schema.contains("\"type\":\"string\""));
@@ -430,15 +422,13 @@ fn test_aip_zmapr_sanitize_prompt_schema_matches_lua_forms() -> Result<()> {
 }
 
 #[test]
-fn test_aip_zmapr_sanitize_prompt_accepts_lua_forms() -> Result<()> {
+fn test_aip_refiner_sanitize_prompt_accepts_lua_forms() -> Result<()> {
 	let lua = Lua::new();
 
-	let table = lua
-		.load(r#"return { sanitize_prompt = "instructions" }"#)
-		.eval::<Table>()?;
+	let table = lua.load(r#"return { sanitize_prompt = "instructions" }"#).eval::<Table>()?;
 	assert!(matches!(
 		optional_sanitize_prompt(&table)?,
-		Some(AipZmaprSanitizePrompt::Content(content)) if content == "instructions"
+		Some(AipRefinrSanitizePrompt::Content(content)) if content == "instructions"
 	));
 
 	let table = lua
@@ -446,7 +436,7 @@ fn test_aip_zmapr_sanitize_prompt_accepts_lua_forms() -> Result<()> {
 		.eval::<Table>()?;
 	assert!(matches!(
 		optional_sanitize_prompt(&table)?,
-		Some(AipZmaprSanitizePrompt::File(path)) if path == "prompt.md"
+		Some(AipRefinrSanitizePrompt::File(path)) if path == "prompt.md"
 	));
 
 	let table = lua
@@ -454,14 +444,14 @@ fn test_aip_zmapr_sanitize_prompt_accepts_lua_forms() -> Result<()> {
 		.eval::<Table>()?;
 	assert!(matches!(
 		optional_sanitize_prompt(&table)?,
-		Some(AipZmaprSanitizePrompt::Content(content)) if content == "instructions"
+		Some(AipRefinrSanitizePrompt::Content(content)) if content == "instructions"
 	));
 
 	Ok(())
 }
 
 #[test]
-fn test_aip_zmapr_sanitize_prompt_rejects_invalid_table_combinations() -> Result<()> {
+fn test_aip_refiner_sanitize_prompt_rejects_invalid_table_combinations() -> Result<()> {
 	let lua = Lua::new();
 
 	for script in [
