@@ -1,6 +1,6 @@
 [package]
 name = "aiprog-macros"
-version = "0.0.3"
+version = "0.0.5"
 edition = "2024"
 description = "Rust engine for moving from AI tool calls to AI program execution"
 license = "MIT OR Apache-2.0"
