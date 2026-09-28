@@ -552,6 +552,7 @@ fn test_build_process_options_uses_ai_context_default_model() {
 
 	// -- Check
 	assert_eq!(options.model.as_deref(), Some("provider/default"));
+	assert!(options.genai_client.is_none());
 	assert_eq!(options.sanitize_model.as_deref(), Some("provider/default"));
 	assert_eq!(options.map_model.as_deref(), Some("provider/default"));
 }
