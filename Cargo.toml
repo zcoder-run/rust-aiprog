@@ -1,6 +1,6 @@
 [package]
 name = "aiprog"
-version = "0.0.5"
+version = "0.0.6-WIP"
 description = "AI program runtime and API set (from Function Calling to Program Running)"
 edition = "2024"
 license = "MIT OR Apache-2.0"
