@@ -5,9 +5,9 @@ use mlua::{Lua, Value};
 use std::future::Future;
 use std::pin::Pin;
 
-/// The pinned future returned by a handler call, resolving to a normalized
+/// The pinned `Send` future returned by a handler call, resolving to a normalized
 /// response (`mlua::Value`) or a normalized `HandlerError`.
-pub type PinFutureValue = Pin<Box<dyn Future<Output = HandlerResult<Value>>>>;
+pub type PinFutureValue = Pin<Box<dyn Future<Output = HandlerResult<Value>> + Send>>;
 
 /// The generic, Lua-agnostic handler trait, modeled on `rpc-router::Handler`.
 ///
@@ -19,6 +19,8 @@ pub type PinFutureValue = Pin<Box<dyn Future<Output = HandlerResult<Value>>>>;
 ///   response satisfy `AipResponse`, error via `IntoHandlerError`).
 /// - Both sync and async handler kinds are supported through the
 ///   `impl_handler!` macro implementations.
+/// - Async handler futures must be `Send + 'static`, as required by the
+///   `mlua` `send` feature.
 /// - The handler layer now depends on `mlua` for the Lua value types.
 ///
 /// Type parameters:

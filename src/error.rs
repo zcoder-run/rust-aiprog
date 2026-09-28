@@ -71,3 +71,29 @@ impl Error {
 impl std::error::Error for Error {}
 
 // endregion: --- Error Boilerplate
+
+// region:    --- Tests
+
+#[cfg(test)]
+mod tests {
+	type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>; // For tests.
+
+	use super::*;
+
+	/// Compile-time guard: anything wrapped into `mlua::Error::external` must be `Send + Sync + 'static`
+	/// (required by the `mlua` `send` feature).
+	fn assert_send_sync<T: Send + Sync + 'static>() {}
+
+	#[test]
+	fn test_error_types_are_send_sync() -> Result<()> {
+		// -- Check
+		assert_send_sync::<Error>();
+		assert_send_sync::<crate::HandlerError>();
+		assert_send_sync::<EngineError>();
+		assert_send_sync::<LuaErrorDetails>();
+
+		Ok(())
+	}
+}
+
+// endregion: --- Tests

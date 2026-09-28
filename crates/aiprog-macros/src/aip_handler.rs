@@ -102,6 +102,14 @@ pub fn aip_handler_attr(_attr: TokenStream, item: TokenStream) -> TokenStream {
 					let output_schema = schemars::schema_for!(#output_ty);
 					let error_schema = schemars::schema_for!(::aiprog::HandlerError);
 
+					// Compile-time guard: async handler futures must be `Send + 'static` (required by mlua `send`).
+					fn __aiprog_assert_send_future<F>(future: F) -> F
+					where
+						F: ::core::future::Future + ::core::marker::Send + 'static,
+					{
+						future
+					}
+
 					let factory: ::aiprog::registry::registry_internal::HandlerFactory = Box::new(|call_context| {
 						let closure: ::aiprog::registry::registry_internal::LuaAsyncClosure = Box::new(move |lua: mlua::Lua, value: mlua::Value| {
 							let call_context = call_context.clone();
@@ -110,9 +118,10 @@ pub fn aip_handler_attr(_attr: TokenStream, item: TokenStream) -> TokenStream {
 								Ok(p) => p,
 								Err(e) => return Box::pin(async move { Err(e) }),
 							};
+							let handler_fut = __aiprog_assert_send_future(#original_ident(call_context, params));
 
 							Box::pin(async move {
-								match #original_ident(call_context, params).await {
+								match handler_fut.await {
 									Ok(output) => <#output_ty as ::aiprog::AipIntoLua>::into_lua(output, &lua)
 										.map_err(|e| mlua::Error::ExternalError(::std::sync::Arc::new(e))),
 									Err(e) => Err(e.into_lua_error()),
@@ -324,6 +333,7 @@ mod tests {
 		let output_str = result.to_string();
 		assert!(output_str.contains("AsyncMarker"));
 		assert!(output_str.contains("__AiprogHandler_my_async_handler"));
+		assert!(output_str.contains("__aiprog_assert_send_future"));
 		assert!(output_str.contains("struct"));
 		assert!(output_str.contains("__aiprog_meta_my_async_handler"));
 		assert!(!output_str.contains("serde :: Serialize"));

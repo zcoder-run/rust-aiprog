@@ -35,7 +35,6 @@ impl From<&mlua::Error> for Error {
 impl From<Error> for mlua::Error {
 	fn from(value: Error) -> Self {
 		// TODO - revisit
-		#[allow(clippy::arc_with_non_send_sync)]
 		mlua::Error::ExternalError(Arc::new(value))
 	}
 }

@@ -430,6 +430,42 @@ mod tests {
 
 		Ok(())
 	}
+
+	#[test]
+	fn test_script_engine_captured_state_is_send_sync() -> Result<()> {
+		// -- Setup & Fixtures
+		fn assert_send_sync<T: Send + Sync + 'static>() {}
+		fn assert_send<T: Send + 'static>() {}
+
+		// -- Exec & Check
+		assert_send_sync::<RunningContext>();
+		assert_send_sync::<HandlerCallContext>();
+		assert_send_sync::<DirContext>();
+		assert_send_sync::<crate::AiContext>();
+		assert_send_sync::<AipRegistry>();
+		assert_send_sync::<NativeFunctionSet>();
+		assert_send_sync::<ScriptEngine>();
+		assert_send::<RunningEngine>();
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_script_engine_exec_future_is_send() -> Result<()> {
+		// -- Setup & Fixtures
+		fn assert_send<T: Send>(_: &T) {}
+		let engine = ScriptEngine::builder()
+			.with_registry(AipRegistry::from_empty())
+			.build()?;
+
+		// -- Exec
+		let fut = engine.exec("return 1", RunningContext::default());
+
+		// -- Check
+		assert_send(&fut);
+
+		Ok(())
+	}
 }
 
 // endregion: --- Tests

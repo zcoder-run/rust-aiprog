@@ -10,7 +10,8 @@ use crate::HandlerCallContext;
 
 pub type LuaSyncClosure = Box<dyn Fn(&Lua, Value) -> mlua::Result<Value> + Send + Sync>;
 
-pub type LuaAsyncClosure = Box<dyn Fn(Lua, Value) -> Pin<Box<dyn Future<Output = mlua::Result<Value>>>> + Send + Sync>;
+pub type LuaAsyncClosure =
+	Box<dyn Fn(Lua, Value) -> Pin<Box<dyn Future<Output = mlua::Result<Value>> + Send>> + Send + Sync>;
 
 pub type HandlerFactory = Box<dyn Fn(HandlerCallContext) -> AipHandlerClosure + Send + Sync>;
 
