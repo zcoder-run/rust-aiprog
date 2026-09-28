@@ -12,9 +12,15 @@ The crate is designed for applications that want an AI system, or another progra
 
 - [`AipModule`](crate::AipModule) provides composable registration for a group of handlers. Built-in modules include [`JsonModule`](crate::modules::JsonModule), [`WebModule`](crate::modules::WebModule), [`FileModule`](crate::modules::FileModule), and [`HtmlModule`](crate::modules::HtmlModule).
 
+## Registry defaults
+
+`AipRegistry::from_empty()` builds a registry with no handlers. It is equivalent to `AipRegistryBuilder::default().build()`. `AipRegistryBuilder::default()` creates an empty builder that you can register handlers or modules with before calling `build()`. The current API does not implement `Default` for `AipRegistry`. Use `AipRegistry::from_aip_modules()` to create a registry containing the built-in modules.
+
+`RunningContext::default()` is different: it creates an empty store for execution-scoped values. It does not create a registry or add capabilities.
+
 ## Execution with context
 
-Use [`ScriptEngine`] when handlers need caller-provided capabilities or state. Insert values into a [`RunningContext`] before execution, then recover them from the returned [`RunOutcome`].
+`RunningContext::default()` creates an empty typed-value store. Use [`ScriptEngine`] when handlers need caller-provided capabilities or state. Insert values before execution, then recover the returned context from [`RunOutcome`]. If no [`DirContext`] is supplied, the engine adds a default one rooted at the current directory. It does not add an [`AiContext`], so insert one explicitly when handlers need it.
 
 ```rust
 use aiprog::{AipRegistry, RunningContext, ScriptEngine};
@@ -30,6 +36,39 @@ let outcome = engine
 let value = outcome.result?;
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
+
+### Setting `DirContext` and `AiContext`
+
+Insert these values into the context before calling `exec`. `DirContext::from_base_dir` is a convenient option when an existing directory should be the read and write root. Use `DirContext::new` with separate `PathPolicy` values when read and write access need different roots or permissions.
+
+```rust
+use aiprog::{AiContext, AipRegistry, DirContext, RunningContext, ScriptEngine};
+use std::collections::HashMap;
+
+let engine = ScriptEngine::builder()
+	.with_registry(AipRegistry::from_empty())
+	.build()?;
+
+let mut context = RunningContext::default();
+context.insert(DirContext::from_base_dir("./workspace")?);
+context.insert(
+	AiContext::default()
+		.with_model_map(HashMap::from([(
+			"fast".to_string(),
+			"provider/fast".to_string(),
+		)]))
+		.with_default_model("fast"),
+);
+
+let outcome = engine
+	.exec("return { message = 'hello' }", context)
+	.await?;
+let (result, _returned_context) = outcome.into_parts();
+let value = result?;
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+The directory passed to `DirContext::from_base_dir` must already exist. Add a GenAI client with `.with_genai_client(client)` when AI-backed handlers need one. The model map resolves aliases to provider model names, and the default model is used when a request does not select one.
 
 Handlers receive a [`HandlerCallContext`] and can access typed values in the current [`RunningContext`]. Applications commonly insert capability policies, service clients, or request-specific state into the context before starting an engine.
 
@@ -60,7 +99,5 @@ Use [`RunOutcome::into_parts`](crate::RunOutcome::into_parts) when both the scri
 - [`registry`](crate::registry) contains handler registration, schemas, handler errors, and registry selection.
 - [`schema_ref`](crate::schema_ref) contains read-only schema inspection helpers.
 - [`modules`](crate::modules) exposes the built-in module marker types and filesystem policy types.
-- [`webc`](crate::webc) provides the underlying web client abstractions.
-- [`types`](crate::types) contains public supporting types.
 
 The Lua runtime's built-in functions and registered handlers are implementation details of the selected registry and modules. Rustdoc documents the Rust API used to configure and host that runtime.

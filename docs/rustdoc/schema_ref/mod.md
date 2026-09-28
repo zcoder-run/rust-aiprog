@@ -9,7 +9,7 @@ These types do not own or modify schema data. Their lifetimes are tied to the so
 ## Example
 
 ```rust
-use aiprog::SchemaRef;
+use aiprog::schema_ref::SchemaRef;
 use schemars::{schema_for, JsonSchema};
 
 #[derive(JsonSchema)]
