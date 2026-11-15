@@ -4,7 +4,6 @@ version = "0.0.5"
 edition = "2024"
 description = "Rust engine for moving from AI tool calls to AI program execution"
 license = "MIT OR Apache-2.0"
-homepage = "https://github.com/zcoder-run/aiprog"
 repository = "https://github.com/zcoder-run/aiprog"
 categories = [
   "development-tools",

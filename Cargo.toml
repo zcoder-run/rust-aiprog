@@ -1,13 +1,13 @@
 [package]
 name = "aiprog"
-version = "0.0.7-WIP"
+version = "0.0.7"
+publish = false # WIP. Comment/Delete for release.
 description = "AI program runtime and API set (from Function Calling to Program Running)"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 categories = [ "development-tools", "api-bindings" ]
 keywords = ["ai", "lua", "mcp", "llm", "agent"]
 authors = ["Jeremy Chone"]
-homepage = "https://github.com/zcoder-run/rust-aiprog"
 repository = "https://github.com/zcoder-run/rust-aiprog"
 
 
@@ -45,7 +45,7 @@ udiffx = { version = "0.3", features = ["prompt"]}
 aicost = { version = "0.3"}
 markex = { version = "0.3.0" }
 sysone = { version = "0.0.3" }
-refinr = { version = "0.0.3" }
+refinr = { version = "0.0.4" }
 # -- Json & Data Formats
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
