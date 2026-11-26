@@ -69,10 +69,7 @@ mod tests {
 			context.resolve_model(Some("provider/literal")).as_deref(),
 			Some("provider/literal")
 		);
-		assert_eq!(
-			context.resolve_model(None).as_deref(),
-			Some("provider/default")
-		);
+		assert_eq!(context.resolve_model(None).as_deref(), Some("provider/default"));
 	}
 
 	#[test]

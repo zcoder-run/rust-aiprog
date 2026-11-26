@@ -454,9 +454,7 @@ mod tests {
 	fn test_script_engine_exec_future_is_send() -> Result<()> {
 		// -- Setup & Fixtures
 		fn assert_send<T: Send>(_: &T) {}
-		let engine = ScriptEngine::builder()
-			.with_registry(AipRegistry::from_empty())
-			.build()?;
+		let engine = ScriptEngine::builder().with_registry(AipRegistry::from_empty()).build()?;
 
 		// -- Exec
 		let fut = engine.exec("return 1", RunningContext::default());

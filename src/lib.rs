@@ -21,9 +21,9 @@ pub mod schema_ref;
 
 mod error;
 
+pub use ai_context::AiContext;
 pub use error::{Error, Result};
 pub use error_lua_details::LuaErrorDetails;
-pub use ai_context::AiContext;
 pub use modules::{AbsolutePathPolicy, DirContext, DirPolicyError, PathPolicy, ResolvedDirPath};
 pub use run_outcome::RunOutcome;
 pub use running_context::{ContextAccessError, ContextRecoveryError, HandlerCallContext, RunningContext};
